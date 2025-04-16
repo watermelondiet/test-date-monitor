@@ -3,8 +3,6 @@ from bs4 import BeautifulSoup
 import re
 import os
 import json
-import time
-from datetime import datetime
 
 # Configuration
 TOPIC_NAME = "NIC-Esthetics-Alerts-Fife"
@@ -93,16 +91,5 @@ def check_for_new_test_dates():
     else:
         print("❌ No table found in the response.")
 
-def wait_until_next_half_hour():
-    while True:
-        now = datetime.now()
-        if now.minute in [0, 30] and now.second == 0:
-            break
-        time.sleep(1)
-
-# Main loop
-while True:
-    wait_until_next_half_hour()
-    print(f"🕒 Running at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    check_for_new_test_dates()
-    time.sleep(61)  # Avoid duplicate triggers within the same minute
+# 🧠 Entry point (just runs once)
+check_for_new_test_dates()
