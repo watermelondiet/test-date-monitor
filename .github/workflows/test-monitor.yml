@@ -2,7 +2,7 @@ name: Test Date Monitor
 
 on:
   schedule:
-    - cron: '1,16,31,46 * * * *'
+    - cron: '3,33 * * * *'
   workflow_dispatch:
 
 jobs:
