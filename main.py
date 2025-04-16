@@ -3,12 +3,35 @@ from bs4 import BeautifulSoup
 import re
 import os
 import json
+from datetime import datetime, timedelta
 
-# Configuration
+# === Config ===
 TOPIC_NAME = "NIC-Esthetics-Alerts-Fife"
 SEEN_FILE = "seen_test_entries.json"
+RUN_TRACK_FILE = "last_run.json"
 URL = "https://www.isoqualitytesting.com/waavail.aspx"
 
+# === Logging Run Time ===
+print(f"🕒 Workflow started at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+
+# === Prevent duplicate runs (10 min cooldown) ===
+def should_run_now():
+    if not os.path.exists(RUN_TRACK_FILE):
+        return True
+    with open(RUN_TRACK_FILE, "r") as f:
+        data = json.load(f)
+    last_run = datetime.fromisoformat(data["last_run"])
+    now = datetime.utcnow()
+    if (now - last_run) > timedelta(minutes=10):
+        return True
+    print(f"⚠️ Skipping duplicate run. Last run was at {last_run}")
+    return False
+
+def update_last_run_time():
+    with open(RUN_TRACK_FILE, "w") as f:
+        json.dump({"last_run": datetime.utcnow().isoformat()}, f)
+
+# === Push Notification ===
 def send_push_notification(test_info):
     url = f"https://ntfy.sh/NIC-Esthetics-Alerts-Fife"
     headers = {
@@ -22,6 +45,7 @@ def send_push_notification(test_info):
     else:
         print(f"❌ Failed to send notification: {response.status_code}")
 
+# === Data Handling ===
 def load_seen_entries():
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE, "r", encoding="utf-8") as f:
@@ -39,6 +63,7 @@ def extract_hidden_fields(soup):
             data[tag["name"]] = tag.get("value", "")
     return data
 
+# === Main Check Function ===
 def check_for_new_test_dates():
     seen_entries = load_seen_entries()
     new_found = False
@@ -47,7 +72,6 @@ def check_for_new_test_dates():
     headers_get = {"User-Agent": "Mozilla/5.0"}
     res = session.get(URL, headers=headers_get)
     soup = BeautifulSoup(res.text, "html.parser")
-
     data = extract_hidden_fields(soup)
 
     data.update({
@@ -91,5 +115,9 @@ def check_for_new_test_dates():
     else:
         print("❌ No table found in the response.")
 
-# 🧠 Entry point (just runs once)
-check_for_new_test_dates()
+# === Run ===
+if should_run_now():
+    update_last_run_time()
+    check_for_new_test_dates()
+else:
+    print("👋 Exiting early due to cooldown.")
