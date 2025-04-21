@@ -32,13 +32,13 @@ def update_last_run_time():
         json.dump({"last_run": datetime.utcnow().isoformat()}, f)
 
 # === Push Notification ===
-def send_push_notification(test_info):
-    url = f"https://ntfy.sh/NIC-Esthetics-Alerts-Fife"
+def send_push_notification(formatted_message):
+    url = f"https://ntfy.sh/{TOPIC_NAME}"
     headers = {
         "Title": "New Test Date Found!",
         "Priority": "high"
     }
-    message = f"🚨 A new NIC Esthetics test has been posted:\n\n{test_info}"
+    message = f"🚨 A new NIC Esthetics test has been posted:\n\n{formatted_message}"
     response = requests.post(url, data=message.encode("utf-8"), headers=headers)
     if response.status_code == 200:
         print("✅ Notification sent.")
@@ -62,6 +62,30 @@ def extract_hidden_fields(soup):
         if tag.has_attr("name"):
             data[tag["name"]] = tag.get("value", "")
     return data
+
+# === Parsing and Formatting ===
+def parse_test_entry(row_text):
+    """
+    Extracts the parts of the test entry and returns:
+    - A normalized key (used to detect duplicates)
+    - A formatted message (used for notification)
+    """
+    match = re.match(r'([A-Za-z]{3,9})\s+(\d{1,2})\s+(\d{4})(\d{1,2}:\d{2}\s*[AP]M)(\d{1,2}:\d{2}\s*[AP]M)(.*?)(\d+)$', row_text)
+    if not match:
+        return row_text.strip(), row_text.strip()  # fallback if parsing fails
+
+    month, day, year, start_time, end_time, exam_name, slots = match.groups()
+
+    normalized_key = f"{month} {day} {year} {start_time.strip()} {end_time.strip()} {exam_name.strip()}"
+
+    formatted = (
+        f"📅 {month} {day}, {year}\n"
+        f"🕐 {start_time.strip()} – {end_time.strip()}\n"
+        f"💅 {exam_name.strip()}\n"
+        f"🪑 {slots} slot(s) remaining"
+    )
+
+    return normalized_key.strip(), formatted.strip()
 
 # === Main Check Function ===
 def check_for_new_test_dates():
@@ -104,9 +128,10 @@ def check_for_new_test_dates():
         for row in soup_table.find_all("tr"):
             row_text = row.text.strip()
             if re.search(r"NIC.*Esthetics", row_text, re.IGNORECASE):
-                if row_text not in seen_entries:
-                    send_push_notification(row_text)
-                    seen_entries.add(row_text)
+                norm_key, formatted_message = parse_test_entry(row_text)
+                if norm_key not in seen_entries:
+                    send_push_notification(formatted_message)
+                    seen_entries.add(norm_key)
                     new_found = True
 
         if not new_found:
